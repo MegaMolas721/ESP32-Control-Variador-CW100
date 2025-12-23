@@ -63,24 +63,21 @@ extern const uint8_t OUTPUT_PINS[NUM_OUTPUTS];
 // ============================================================
 // REGISTROS MODBUS DEL VARIADOR CW100
 // ============================================================
-// Según tabla actualizada de registros
+// Valores decimales con offset +1 ya integrado (probados y funcionales)
 
 // REGISTROS DE ESCRITURA (Holding Registers - FC06/FC16)
-#define REG_FREQUENCY_SETPOINT      1000    // 0x03E8 (4097) - Frecuencia Setpoint (Hz × 100)
-#define REG_COMMAND                 2000    // 0x07D0 (8193) - Comando de ejecución
+#define REG_FREQUENCY_SETPOINT      4097    // 0x1000 Hex → 4097 Decimal - Frecuencia Setpoint (Hz × 100)
+#define REG_COMMAND                 8193    // 0x2000 Hex → 8193 Decimal - Comando de ejecución
 
 // REGISTROS DE LECTURA (Holding Registers - FC03/FC04)
-#define REG_FREQ_CURRENT            1001    // 0x03E9 (4098) - Frecuencia actual (Lectura)
-#define REG_VOLTAGE_OUTPUT          1003    // 0x03EB (4100) - Voltaje de salida (Lectura)
-#define REG_CURRENT_OUTPUT          1004    // 0x03EC (4101) - Corriente de salida (Lectura) / Amperaje real
-#define REG_SPEED_ACTUAL            1007    // 0x03EF (4104) - Velocidad actual (Lectura)
-#define REG_VFD_STATUS              3000    // 0x0BB8 (12289) - Estado del variador (Lectura)
-#define REG_FREQUENCY_TARGET        3001    // 0x0BB9 (12290) - Frecuencia Meta (Lectura)
-#define REG_FREQUENCY_ACTUAL        3002    // 0x0BBA (12291) - Frecuencia Real (Lectura)
-#define REG_CURRENT_ACTUAL          3003    // 0x0BBB (12292) - Amperaje real (Lectura) / Corriente de salida
-#define REG_FAULT_CODE              8000    // 0x1F40 (32769) - Código de Falla (Lectura)
-#define REG_MAX_FREQUENCY           0xF00A  // 61451 - Frecuencia Máxima (Lectura)
-#define REG_UPPER_LIMIT             0xF00C  // 61453 - Límite Superior (Lectura)
+#define REG_FREQ_CURRENT            4098    // 0x1001 Hex → 4098 Decimal - Frecuencia actual (Lectura)
+#define REG_VOLTAGE_OUTPUT          4100    // 0x1003 Hex → 4100 Decimal - Voltaje de salida (Lectura)
+#define REG_CURRENT_OUTPUT          4101    // 0x1004 Hex → 4101 Decimal - Corriente de salida (Lectura)
+#define REG_SPEED_ACTUAL            4104    // 0x1007 Hex → 4104 Decimal - Velocidad actual (Lectura)
+#define REG_VFD_STATUS              12289   // 0x3000 Hex → 12289 Decimal - Estado del variador (Lectura)
+#define REG_FAULT_CODE              32769   // 0x8000 Hex → 32769 Decimal - Código de Falla (Lectura)
+#define REG_MAX_FREQUENCY           61451   // 0xF00A Hex → 61451 Decimal - Frecuencia Máxima (Lectura)
+#define REG_UPPER_LIMIT             61453   // 0xF00C Hex → 61453 Decimal - Límite Superior (Lectura)
 
 // ============================================================
 // COMANDOS DEL VARIADOR CW100 (Registro 2000H)

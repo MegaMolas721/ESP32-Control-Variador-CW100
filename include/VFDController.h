@@ -3,27 +3,9 @@
 
 #include <Arduino.h>
 #include "ModbusManager.h"
+#include "config.h"  // Incluir config.h para usar las definiciones de registros
 
-// Registros Modbus del variador CW100 (actualizados)
-#define REG_FREQ_SETPOINT       1000    // 0x03E8 (4097) - Frecuencia Setpoint (Escritura)
-#define REG_COMMAND             2000    // 0x07D0 (8193) - Comando de ejecución (Escritura)
-#define REG_VFD_STATUS          3000    // 0x0BB8 (12289) - Estatus del variador (Lectura)
-#define REG_FAULT_CODE          8000    // 0x1F40 (32769) - Código de Falla (Lectura)
-#define REG_FREQ_ACTUAL         1001    // 0x03E9 (4098) - Frecuencia actual (Lectura)
-#define REG_VOLTAGE_OUT         1003    // 0x03EB (4100) - Voltaje de salida (Lectura)
-#define REG_CURRENT_OUT         1004    // 0x03EC (4101) - Corriente de salida (Lectura)
-#define REG_SPEED_ACTUAL        1007    // 0x03EF (4104) - Velocidad actual (Lectura)
-#define REG_MAX_FREQUENCY       0xF00A  // (61451) - Frecuencia Máxima (Lectura)
-#define REG_UPPER_LIMIT         0xF00C  // (61453) - Límite Superior (Lectura)
-
-// Comandos del variador (Registro 2000)
-#define CMD_RUN                 1       // RUN (arrancar)
-#define CMD_STOP                6       // STOP (parar)
-#define CMD_FAULT_RESET         0x0080  // Reset de falla
-#define CMD_JOG_FORWARD         0x0010  // JOG adelante
-#define CMD_JOG_REVERSE         0x0020  // JOG reversa
-
-// Estados del variador (Registro 3000)
+// Estados del variador (Registro REG_VFD_STATUS)
 #define STATUS_FORWARD          1       // 1 = Adelante
 #define STATUS_REVERSE          2       // 2 = Atrás
 #define STATUS_STOP             3       // 3 = Stop

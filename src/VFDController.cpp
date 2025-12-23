@@ -49,7 +49,7 @@ void VFDController::resetFault() {
 void VFDController::setFrequency(float hz) {
     uint16_t freqValue = (uint16_t)(hz * 100);  // Convertir Hz a valor Modbus (Hz x 100)
     Serial.printf("Configurando frecuencia: %.2f Hz (0x%04X)\n", hz, freqValue);
-    _modbus.writeHoldingRegister(REG_FREQ_SETPOINT, freqValue, REG_FREQ_SETPOINT);
+    _modbus.writeHoldingRegister(REG_FREQUENCY_SETPOINT, freqValue, REG_FREQUENCY_SETPOINT);
 }
 
 // ============================================================
@@ -61,15 +61,15 @@ void VFDController::readStatus() {
 }
 
 void VFDController::readFrequency() {
-    _modbus.readHoldingRegister(REG_FREQ_ACTUAL, 1, REG_FREQ_ACTUAL);
+    _modbus.readHoldingRegister(REG_FREQ_CURRENT, 1, REG_FREQ_CURRENT);
 }
 
 void VFDController::readCurrent() {
-    _modbus.readHoldingRegister(REG_CURRENT_OUT, 1, REG_CURRENT_OUT);
+    _modbus.readHoldingRegister(REG_CURRENT_OUTPUT, 1, REG_CURRENT_OUTPUT);
 }
 
 void VFDController::readVoltage() {
-    _modbus.readHoldingRegister(REG_VOLTAGE_OUT, 1, REG_VOLTAGE_OUT);
+    _modbus.readHoldingRegister(REG_VOLTAGE_OUTPUT, 1, REG_VOLTAGE_OUTPUT);
 }
 
 void VFDController::readFaultCode() {
@@ -131,19 +131,19 @@ void VFDController::handleModbusData(ModbusMessage response, uint32_t token) {
             Serial.printf("Estado VFD: %d (%s)\n", value, getStatusText().c_str());
             break;
             
-        case REG_FREQ_ACTUAL:
+        case REG_FREQ_CURRENT:
             _data.frequencyActual = value;
             calculateSpeedPercent();
             Serial.printf("Frecuencia actual: %.2f Hz (%.2f%%)\n", 
                          value / 100.0, _data.speedPercent);
             break;
             
-        case REG_CURRENT_OUT:
+        case REG_CURRENT_OUTPUT:
             _data.currentOut = value;
             Serial.printf("Corriente: %.2f A\n", value / 100.0);
             break;
             
-        case REG_VOLTAGE_OUT:
+        case REG_VOLTAGE_OUTPUT:
             _data.voltageOut = value;
             Serial.printf("Voltaje salida: %d V\n", value);
             break;
@@ -166,7 +166,7 @@ void VFDController::handleModbusData(ModbusMessage response, uint32_t token) {
             Serial.printf("Frecuencia máxima: %.2f Hz\n", value / 100.0);
             break;
             
-        case REG_FREQ_SETPOINT:
+        case REG_FREQUENCY_SETPOINT:
             _data.frequencySetpoint = value;
             Serial.println("✓ Frecuencia configurada");
             break;

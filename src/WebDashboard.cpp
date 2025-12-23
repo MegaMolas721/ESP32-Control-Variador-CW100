@@ -54,6 +54,19 @@ void WebDashboard::setupRoutes() {
     _server.on("/api/frequency", HTTP_POST, [this](AsyncWebServerRequest *request){
         this->handleSetFrequency(request);
     });
+    
+    // API: Configurar velocidad por porcentaje (0-100%)
+    _server.on("/api/speed", HTTP_POST, [this](AsyncWebServerRequest *request){
+        if (request->hasParam("percent", true)) {
+            float percent = request->getParam("percent", true)->value().toFloat();
+            // Convertir porcentaje a frecuencia (asumiendo 60Hz = 100%)
+            float freq = (percent / 100.0f) * 60.0f;
+            _vfd.setFrequency(freq);
+            request->send(200, "application/json", "{\"status\":\"ok\",\"frequency\":" + String(freq, 2) + "}");
+        } else {
+            request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Falta parámetro percent\"}");
+        }
+    });
 }
 
 void WebDashboard::handleRoot(AsyncWebServerRequest *request) {
@@ -240,23 +253,57 @@ String WebDashboard::generateHTML() {
             color: #999;
             margin-left: 5px;
         }
-        .progress-bar {
-            width: 100%;
-            height: 40px;
-            background: #e0e0e0;
-            border-radius: 20px;
-            overflow: hidden;
-            position: relative;
-        }
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #4CAF50 0%, #8BC34A 100%);
-            transition: width 0.5s ease;
+        .speed-control {
             display: flex;
             align-items: center;
-            justify-content: center;
-            color: white;
+            gap: 15px;
+            padding: 10px 0;
+        }
+        .speed-slider {
+            flex: 1;
+            height: 40px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: linear-gradient(90deg, #e0e0e0 0%, #4CAF50 100%);
+            border-radius: 20px;
+            outline: none;
+        }
+        .speed-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 50px;
+            height: 50px;
+            background: #2196F3;
+            border: 4px solid white;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+        }
+        .speed-slider::-webkit-slider-thumb:hover {
+            background: #1976D2;
+            transform: scale(1.1);
+        }
+        .speed-slider::-moz-range-thumb {
+            width: 50px;
+            height: 50px;
+            background: #2196F3;
+            border: 4px solid white;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+        }
+        .speed-slider::-moz-range-thumb:hover {
+            background: #1976D2;
+            transform: scale(1.1);
+        }
+        .speed-value {
+            min-width: 60px;
+            font-size: 1.5em;
             font-weight: bold;
+            color: #2196F3;
+            text-align: center;
         }
         .status-box {
             padding: 15px;
@@ -410,10 +457,12 @@ String WebDashboard::generateHTML() {
             <!-- Porcentaje de Velocidad -->
             <div class="card">
                 <div class="card-title">Porcentaje de Velocidad Nominal</div>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="speedBar" style="width: 0%;">
-                        <span id="speedPercent">0.00%</span>
-                    </div>
+                <div class="speed-control">
+                    <input type="range" id="speedSlider" class="speed-slider" 
+                           min="0" max="100" value="0" step="1"
+                           oninput="updateSpeedDisplay(this.value)"
+                           onchange="setSpeed(this.value)">
+                    <span id="speedValue" class="speed-value">0%</span>
                 </div>
             </div>
             
@@ -547,11 +596,13 @@ String WebDashboard::generateHTML() {
                     document.getElementById('current').innerHTML = 
                         data.current.toFixed(2) + '<span class="unit">A</span>';
                     
-                    // Actualizar barra de velocidad
-                    const speedBar = document.getElementById('speedBar');
-                    const speedPercent = document.getElementById('speedPercent');
-                    speedBar.style.width = data.speedPercent + '%';
-                    speedPercent.textContent = data.speedPercent.toFixed(2) + '%';
+                    // Actualizar slider de velocidad (solo si el usuario no lo está moviendo)
+                    const speedSlider = document.getElementById('speedSlider');
+                    const speedValue = document.getElementById('speedValue');
+                    if (document.activeElement !== speedSlider) {
+                        speedSlider.value = Math.round(data.speedPercent);
+                        speedValue.textContent = Math.round(data.speedPercent) + '%';
+                    }
                     
                     // Actualizar estado
                     const statusBox = document.getElementById('statusBox');
@@ -609,6 +660,26 @@ String WebDashboard::generateHTML() {
             .then(response => response.json())
             .then(data => {
                 alert(data.message);
+                setTimeout(updateStatus, 500);
+            })
+            .catch(error => console.error('Error:', error));
+        }
+        
+        // Actualizar display del slider en tiempo real
+        function updateSpeedDisplay(value) {
+            document.getElementById('speedValue').textContent = value + '%';
+        }
+        
+        // Enviar nueva velocidad cuando el usuario suelta el slider
+        function setSpeed(percent) {
+            fetch('/api/speed', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'percent=' + percent
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Velocidad establecida: ' + percent + '% (' + data.frequency + ' Hz)');
                 setTimeout(updateStatus, 500);
             })
             .catch(error => console.error('Error:', error));
