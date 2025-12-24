@@ -2,10 +2,11 @@
 #define IO_MANAGER_H
 
 #include <Arduino.h>
+#include "config.h"
 
 // Configuración de pines del PLC ESP32 30 pines
-#define NUM_INPUTS  9
-#define NUM_OUTPUTS 10
+// NUM_INPUTS y NUM_OUTPUTS se definen en config.h
+// 9 entradas, 7 salidas (3 deshabilitadas por conflictos)
 
 class IOManager {
 public:
@@ -37,8 +38,8 @@ private:
     // Pines de entradas (9 entradas optoacopladas)
     const uint8_t _inputPins[NUM_INPUTS] = {17, 18, 19, 21, 22, 23, 27, 32, 33};
     
-    // Pines de salidas (10 salidas a relevador)
-    const uint8_t _outputPins[NUM_OUTPUTS] = {1, 2, 3, 4, 5, 12, 13, 14, 15, 16};
+    // Pines de salidas (7 salidas a relevador - GPIO1, GPIO12, GPIO15 deshabilitados)
+    const uint8_t _outputPins[NUM_OUTPUTS] = {2, 3, 4, 5, 13, 14, 16};
     
     // Estados actuales
     bool _inputStates[NUM_INPUTS];

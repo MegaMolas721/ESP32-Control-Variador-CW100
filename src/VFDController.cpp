@@ -5,6 +5,10 @@ VFDController::VFDController(ModbusManager& modbus) :
     _lastAutoUpdate(0) {
     memset(&_data, 0, sizeof(VFDData));
     _data.lastCommand = CMD_STOP;  // Inicializar en STOP (6) por defecto
+    _modbusLocked = false;
+    _maxReadRetries = 2;
+    _lastSetpointRequested = 0;
+    _lastSetpointRead = 0;
 }
 
 void VFDController::begin() {
@@ -28,12 +32,32 @@ void VFDController::begin() {
 
 void VFDController::start() {
     Serial.println("▶️ Arrancando motor...");
+    Serial.printf("   Escribiendo: Registro=%d (0x%04X), Valor=%d\n", REG_COMMAND, REG_COMMAND, CMD_RUN);
+    if (_modbusLocked) {
+        unsigned long waitStart = millis();
+        while (_modbusLocked && (millis() - waitStart) < 500) delay(10);
+        if (_modbusLocked) {
+            Serial.println("[WARN] Modbus ocupado, abortando arranque");
+            return;
+        }
+    }
+    _modbusLocked = true;
     _modbus.writeHoldingRegister(REG_COMMAND, CMD_RUN, REG_COMMAND);
     _data.lastCommand = CMD_RUN;  // Registrar comando enviado (1)
 }
 
 void VFDController::stop() {
     Serial.println("⏹️ Deteniendo motor...");
+    Serial.printf("   Escribiendo: Registro=%d (0x%04X), Valor=%d\n", REG_COMMAND, REG_COMMAND, CMD_STOP);
+    if (_modbusLocked) {
+        unsigned long waitStart = millis();
+        while (_modbusLocked && (millis() - waitStart) < 500) delay(10);
+        if (_modbusLocked) {
+            Serial.println("[WARN] Modbus ocupado, abortando paro");
+            return;
+        }
+    }
+    _modbusLocked = true;
     _modbus.writeHoldingRegister(REG_COMMAND, CMD_STOP, REG_COMMAND);
     _data.lastCommand = CMD_STOP;  // Registrar comando enviado (6)
 }
@@ -47,9 +71,26 @@ void VFDController::resetFault() {
 }
 
 void VFDController::setFrequency(float hz) {
-    uint16_t freqValue = (uint16_t)(hz * 100);  // Convertir Hz a valor Modbus (Hz x 100)
-    Serial.printf("Configurando frecuencia: %.2f Hz (0x%04X)\n", hz, freqValue);
-    _modbus.writeHoldingRegister(REG_FREQUENCY_SETPOINT, freqValue, REG_FREQUENCY_SETPOINT);
+    // Calcular porcentaje asumiendo 60Hz = 100%
+    float percent = (hz / 60.0f) * 100.0f;
+    uint16_t percentValue = (uint16_t)(percent * 100);  // Porcentaje x 100 (ej: 50% = 5000)
+    Serial.printf("Configurando velocidad: %.2f Hz = %.2f%% (0x%04X)\n", hz, percent, percentValue);
+    Serial.printf("   Escribiendo: Registro=%d (0x%04X), Valor=%d\n", REG_FREQUENCY_SETPOINT, REG_FREQUENCY_SETPOINT, percentValue);
+    if (_modbusLocked) {
+        unsigned long waitStart = millis();
+        while (_modbusLocked && (millis() - waitStart) < 500) delay(10);
+        if (_modbusLocked) {
+            Serial.println("[WARN] Modbus ocupado, abortando escritura de setpoint");
+            return;
+        }
+    }
+    _modbusLocked = true;
+    _lastSetpointRequested = percentValue;
+    _modbus.writeHoldingRegister(REG_FREQUENCY_SETPOINT, percentValue, REG_FREQUENCY_SETPOINT);
+    // Verificación: leer el holding register inmediatamente para confirmar escritura
+    uint32_t verifyToken = REG_FREQUENCY_SETPOINT | 0x80000000u;
+    delay(50);
+    _modbus.readHoldingRegister(REG_FREQUENCY_SETPOINT, 1, verifyToken);
 }
 
 // ============================================================
@@ -61,6 +102,9 @@ void VFDController::readStatus() {
 }
 
 void VFDController::readFrequency() {
+    if (_modbusLocked) return; // Evitar solapamiento de lecturas
+    _modbusLocked = true;
+    Serial.printf("[DEBUG] Leyendo frecuencia desde registro %d (0x%04X) [holding register]\n", REG_FREQ_CURRENT, REG_FREQ_CURRENT);
     _modbus.readHoldingRegister(REG_FREQ_CURRENT, 1, REG_FREQ_CURRENT);
 }
 
@@ -87,6 +131,9 @@ void VFDController::readAllParameters() {
     readVoltage();
     delay(50);
     readFaultCode();
+    delay(50);
+    // Leer también el setpoint (holding register 1000H) para mantener sincronizado el UI
+    _modbus.readHoldingRegister(REG_FREQUENCY_SETPOINT, 1, REG_FREQUENCY_SETPOINT);
 }
 
 // ============================================================
@@ -118,13 +165,32 @@ void VFDController::handleModbusData(ModbusMessage response, uint32_t token) {
     if (response.size() < 5) return;
     
     // Extraer valor (los registros están en bytes 3 y 4)
-    uint16_t value = (response[3] << 8) | response[4];
+    uint16_t value = 0;
+    if (response.size() >= 5) {
+        value = (response[3] << 8) | response[4];
+    }
     
     // Actualizar timestamp
     _data.lastUpdate = millis();
     
     // Procesar según el registro (token)
-    switch(token) {
+    bool isVerify = (token & 0x80000000u) != 0;
+    uint32_t bareToken = token & 0x7FFFFFFFu;
+    if (isVerify) {
+        Serial.printf("[VERIFY] Lectura verificación para registro 0x%04X: valor=%d (0x%04X)\n", bareToken, value, value);
+        // Actualizar lectura cache
+        if (bareToken == REG_FREQUENCY_SETPOINT) {
+            _lastSetpointRead = value;
+            if (value == 0 && _lastSetpointRequested != 0) {
+                Serial.println("[ALERT] El setpoint 1000H fue escrito pero ahora lee 0: posible sobreescritura externa");
+            }
+        }
+        // Liberar lock si era la verificación
+        _modbusLocked = false;
+        return;
+    }
+
+    switch(bareToken) {
         case REG_VFD_STATUS:
             _data.status = value;
             _data.isRunning = (value == STATUS_FORWARD || value == STATUS_REVERSE);
@@ -134,8 +200,10 @@ void VFDController::handleModbusData(ModbusMessage response, uint32_t token) {
         case REG_FREQ_CURRENT:
             _data.frequencyActual = value;
             calculateSpeedPercent();
-            Serial.printf("Frecuencia actual: %.2f Hz (%.2f%%)\n", 
+            Serial.printf("Frecuencia actual: %.2f Hz (%.2f%%)\\n", 
                          value / 100.0, _data.speedPercent);
+            // Liberar bloqueo si estaba leyendo frecuencia
+            _modbusLocked = false;
             break;
             
         case REG_CURRENT_OUTPUT:
@@ -168,11 +236,20 @@ void VFDController::handleModbusData(ModbusMessage response, uint32_t token) {
             
         case REG_FREQUENCY_SETPOINT:
             _data.frequencySetpoint = value;
+            _lastSetpointRead = value;
             Serial.println("✓ Frecuencia configurada");
+            // Al recibir un valor 0 inesperado, avisar
+            if (value == 0 && _lastSetpointRequested != 0) {
+                Serial.println("[ALERT] Registro 1000H tiene valor 0 pero se solicitó diferente: posible sobreescritura externa");
+            }
+            // Liberar bloqueo si fue una respuesta a la escritura de setpoint
+            _modbusLocked = false;
             break;
             
         case REG_COMMAND:
             Serial.println("✓ Comando enviado");
+            // Liberar bloqueo si fue respuesta al comando
+            _modbusLocked = false;
             break;
             
         default:
@@ -185,6 +262,10 @@ void VFDController::handleModbusError(Error error, uint32_t token) {
     ModbusError me(error);
     Serial.printf("Error Modbus [Reg 0x%04X]: %02X - %s\n", 
                   token, (int)error, (const char *)me);
+    // Liberar bloqueo si hubo error en cualquiera de las operaciones que usamos con lock
+    if (token == REG_FREQ_CURRENT || token == REG_COMMAND || token == REG_FREQUENCY_SETPOINT) {
+        _modbusLocked = false;
+    }
 }
 
 // ============================================================
@@ -197,6 +278,11 @@ void VFDController::calculateSpeedPercent() {
     const float nominalFreq = 60.0;
     _data.speedPercent = (_data.frequencyActual / 100.0) / nominalFreq * 100.0;
     if (_data.speedPercent > 100.0) _data.speedPercent = 100.0;
+}
+
+uint16_t VFDController::getEffectiveSetpoint() const {
+    if (_lastSetpointRead != 0) return _lastSetpointRead;
+    return _lastSetpointRequested;
 }
 
 String VFDController::getStatusText() const {

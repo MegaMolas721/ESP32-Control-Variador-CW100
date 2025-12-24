@@ -59,10 +59,11 @@ void WebDashboard::setupRoutes() {
     _server.on("/api/speed", HTTP_POST, [this](AsyncWebServerRequest *request){
         if (request->hasParam("percent", true)) {
             float percent = request->getParam("percent", true)->value().toFloat();
-            // Convertir porcentaje a frecuencia (asumiendo 60Hz = 100%)
-            float freq = (percent / 100.0f) * 60.0f;
-            _vfd.setFrequency(freq);
-            request->send(200, "application/json", "{\"status\":\"ok\",\"frequency\":" + String(freq, 2) + "}");
+            // El porcentaje se envía directamente al registro 1000H como percent × 100
+            // El variador calcula la frecuencia según su configuración interna
+            float freq = (percent / 100.0f) * 60.0f;  // Para mostrar al usuario
+            _vfd.setFrequency(freq);  // Internamente convierte a porcentaje
+            request->send(200, "application/json", "{\"status\":\"ok\",\"percent\":" + String(percent, 2) + ",\"frequency\":" + String(freq, 2) + "}");
         } else {
             request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Falta parámetro percent\"}");
         }
@@ -146,6 +147,7 @@ String WebDashboard::generateWiFiInfoJSON() {
 
 String WebDashboard::generateStatusJSON() {
     const VFDData& data = _vfd.getData();
+    uint16_t effectiveSetpoint = _vfd.getEffectiveSetpoint();
     
     String json = "{";
     json += "\"frequency\":" + String(data.frequencyActual / 100.0, 2) + ",";
@@ -154,6 +156,7 @@ String WebDashboard::generateStatusJSON() {
     json += "\"status\":" + String(data.status) + ",";
     json += "\"statusText\":\"" + _vfd.getStatusText() + "\",";
     json += "\"speedPercent\":" + String(data.speedPercent, 2) + ",";
+    json += "\"setpoint\":" + String(effectiveSetpoint) + ",";
     json += "\"faultCode\":" + String(data.faultCode) + ",";
     json += "\"lastCommand\":" + String(data.lastCommand) + ",";  // Comando 2000H (1=RUN, 6=STOP)
     json += "\"isRunning\":" + String(data.isRunning ? "true" : "false") + ",";
@@ -508,16 +511,6 @@ String WebDashboard::generateHTML() {
             </div>
         </div>
         
-        <!-- Control de Frecuencia -->
-        <div class="card">
-            <div class="card-title">Configurar Frecuencia</div>
-            <div class="freq-control">
-                <input type="number" class="freq-input" id="freqInput" 
-                       placeholder="Frecuencia (Hz)" min="0" max="400" step="0.1" value="50.0">
-                <button class="btn-set" onclick="setFrequency()">Establecer</button>
-            </div>
-        </div>
-        
         <!-- Código de Falla -->
         <div class="card">
             <div class="card-title">FALLA</div>
@@ -600,8 +593,17 @@ String WebDashboard::generateHTML() {
                     const speedSlider = document.getElementById('speedSlider');
                     const speedValue = document.getElementById('speedValue');
                     if (document.activeElement !== speedSlider) {
-                        speedSlider.value = Math.round(data.speedPercent);
-                        speedValue.textContent = Math.round(data.speedPercent) + '%';
+                        // Preferir mostrar el setpoint real (registro 1000H) cuando esté disponible,
+                        // en lugar de inferir porcentaje desde la frecuencia actual que puede ser 0.
+                        if (typeof data.setpoint !== 'undefined' && data.setpoint !== null) {
+                            // `setpoint` viene como valor del registro (porcentaje * 100), por ejemplo 6200 => 62%
+                            const spPercent = Math.round(data.setpoint / 100);
+                            speedSlider.value = spPercent;
+                            speedValue.textContent = spPercent + '%';
+                        } else {
+                            speedSlider.value = Math.round(data.speedPercent);
+                            speedValue.textContent = Math.round(data.speedPercent) + '%';
+                        }
                     }
                     
                     // Actualizar estado

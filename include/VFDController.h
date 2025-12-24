@@ -58,6 +58,8 @@ public:
     bool hasFault() const { return _data.hasFault; }
     uint16_t getStatus() const { return _data.status; }
     String getStatusText() const;
+    // Devuelve el setpoint efectivo (último leído si existe, si no el último solicitado)
+    uint16_t getEffectiveSetpoint() const;
     
     // Actualización periódica
     void update();                      // Llamar en loop para actualizar datos
@@ -67,6 +69,10 @@ private:
     VFDData _data;
     unsigned long _lastAutoUpdate;
     const unsigned long _autoUpdateInterval = 2000; // Actualizar cada 2s
+    bool _modbusLocked;
+    uint8_t _maxReadRetries;
+    uint16_t _lastSetpointRequested;
+    uint16_t _lastSetpointRead;
     
     // Procesamiento de respuestas Modbus
     void handleModbusData(ModbusMessage response, uint32_t token);
@@ -74,6 +80,7 @@ private:
     
     // Cálculos
     void calculateSpeedPercent();
+    // Devuelve el setpoint efectivo para UI: preferir último leído, si es 0 usar último solicitado
 };
 
 #endif
