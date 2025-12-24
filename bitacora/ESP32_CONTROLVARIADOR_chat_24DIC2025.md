@@ -193,40 +193,38 @@ Perfecto! He completado la configuración del proyecto. Aquí está el resumen:
 3. **Abrir monitor serial** (115200 baud)
 4. **Comandos disponibles**:
    - `s` - Arrancar
-   - `p` - Parar
-   - `f50.0` - Frecuencia 50Hz
-   - `i` - Info completa
-   - `r` - Reset falla
+   ---
 
-El sistema está listo para controlar el variador CW100 vía Modbus TCP/RTU siguiendo el manual proporcionado.
+   ## 📝 Entrada: 24/12/2025 – Actualización de UI y comandos VFD
 
-Made changes.
+   - **Cambios aplicados:** Añadidos dos toggles autoenclavables en la página "Control Variador CW100":
+      - `Motor Libre` (lado izquierdo): cuando está activo, `STOP` escribe `5` en 2000H (FREE STOP).
+      - `Cambio de Giro` (lado derecho): cuando está activo, `RUN` escribe `2` en 2000H (RUN inverso).
 
-User: Igual el codigo se debe escribir de manera modular, realizando la creacion de los archivos .h en la carpeta include y los archivos .cpp en la carpeta src.
-IGual el modulo main .cpp debe ser la raiz de los modulos, y el maneja de IOS debe ir en modulos en cascada que se llamen desde el main, igual la comunicacion modbus y el dashboard en caso de tener.
-Y asi todas las funcionalidades deben ir llamados desde el main, pero el main debe estar lo mas limpio posible
+   - **Archivos modificados:**
+      - `include/config.h` — añadidos `CMD_RUN_INVERSE (2)` y `CMD_FREE_STOP (5)`.
+      - `include/VFDController.h` — declaraciones `startInverse()` y `freeStop()`.
+      - `src/VFDController.cpp` — implementaciones de `startInverse()` y `freeStop()` que escriben los comandos adecuados en `REG_COMMAND`.
+      - `src/WebDashboard.cpp` — UI: botones cuadrados autoenclavables `#btnFree` y `#btnReverse` posicionados en bordes; JS envía `free`/`reverse` en `/api/command`; servidor interpreta flags y llama a los métodos VFD.
 
+   - **Pruebas realizadas:**
+      - Compilación con PlatformIO: exitosa (`platformio run`).
+      - Firmware subido al dispositivo y verificado: RUN/STOP y toggles funcionan según lo esperado.
+      - Cambios commiteados y pusheados a la rama `Control-con-apoyo-de-IO-de-ESp32`.
 
-GitHub Copilot: Perfecto, voy a modularizar el código siguiendo buenas prácticas. Voy a crear una estructura limpia y profesional. 
+   - **Comandos ejecutados:**
+   ```
+   git add include/config.h include/VFDController.h src/VFDController.cpp src/WebDashboard.cpp
+   git commit -m "UI: toggles for reverse/free-stop; add VFD inverse-run and free-stop commands"
+   git push -u origin Control-con-apoyo-de-IO-de-ESp32
+   ```
 
-Created 5 todos
+   - **Notas / siguientes pasos sugeridos:**
+      - Persistir estado de toggles en `localStorage` para mantener selección entre recargas (opcional).
+      - Añadir badge en la UI que muestre `lastCommand`/dirección y deshabilitar toggles cuando hay falla (opcional).
+      - Crear PR en GitHub para revisión de código (opcional).
 
-Created [](file:///c%3A/Users/hacam/Documents/CURSOS/ModbusPLC/ESP32_COntrolVariador/include/config.h)
-
-Created [](file:///c%3A/Users/hacam/Documents/CURSOS/ModbusPLC/ESP32_COntrolVariador/src/config.cpp)
-
-Starting: *Crear módulo wifi_manager* (2/5)
-
-Created [](file:///c%3A/Users/hacam/Documents/CURSOS/ModbusPLC/ESP32_COntrolVariador/include/wifi_manager.h)
-
-Created [](file:///c%3A/Users/hacam/Documents/CURSOS/ModbusPLC/ESP32_COntrolVariador/src/wifi_manager.cpp)
-
-Starting: *Crear módulo plc_io* (3/5)
-
-Created [](file:///c%3A/Users/hacam/Documents/CURSOS/ModbusPLC/ESP32_COntrolVariador/include/plc_io.h)
-
-Created [](file:///c%3A/Users/hacam/Documents/CURSOS/ModbusPLC/ESP32_COntrolVariador/src/plc_io.cpp)
-
+   - **Estado:** Cambios desplegados y probados en hardware — Todo OK.
 Starting: *Crear módulo modbus_vfd* (4/5)
 
 Created [](file:///c%3A/Users/hacam/Documents/CURSOS/ModbusPLC/ESP32_COntrolVariador/include/modbus_vfd.h)
@@ -397,6 +395,41 @@ GitHub Copilot: Entendido, veo la corrección. El campo que muestra el comando d
 Voy a corregir los módulos: 
 
 Created 3 todos
+
+---
+
+## 📝 Entrada: 24/12/2025 – Actualización de UI y comandos VFD
+
+Resumen rápido:
+- Rama de trabajo: `Control-con-apoyo-de-IO-de-ESp32` (continuación de la sesión)
+- Añadidos dos toggles autoenclavables en la página "Control Variador CW100":
+   - `Motor Libre` (lado izquierdo, casi en el borde): si está activo, el comando de paro escribe `5` en 2000H (FREE STOP).
+   - `Cambio de Giro` (lado derecho, casi en el borde): si está activo, el comando de RUN escribe `2` en 2000H (RUN inverso).
+
+Archivos modificados / añadidos principales:
+- `include/config.h`: nuevas constantes `CMD_RUN_INVERSE (2)` y `CMD_FREE_STOP (5)`.
+- `include/VFDController.h`: declaraciones `startInverse()` y `freeStop()`.
+- `src/VFDController.cpp`: implementaciones de `startInverse()` y `freeStop()` que escriben los valores 2 y 5 en `REG_COMMAND`.
+- `src/WebDashboard.cpp`: UI — reemplazo de checkboxes por botones cuadrados autoenclavables (`#btnFree`, `#btnReverse`) posicionados en los bordes; JS actualizado para enviar `reverse` y `free` en `/api/command`; `/api/command` interpreta los flags y llama a los nuevos métodos VFD.
+
+Pruebas realizadas:
+- Compilación con PlatformIO: exitosa (`platformio run`).
+- Firmware subido al dispositivo y verificado en campo: acciones RUN/STOP con toggles funcionan según lo esperado.
+- Cambios commiteados y pusheados a remoto (rama mencionada).
+
+Comandos útiles ejecutados localmente:
+```
+git add include/config.h include/VFDController.h src/VFDController.cpp src/WebDashboard.cpp
+git commit -m "UI: toggles for reverse/free-stop; add VFD inverse-run and free-stop commands"
+git push -u origin Control-con-apoyo-de-IO-de-ESp32
+```
+
+Notas / próximos pasos sugeridos:
+- (Opcional) Persistir estado de toggles en `localStorage` para mantener selección entre recargas.
+- (Opcional) Añadir badge en UI que muestre `lastCommand`/dirección y/o deshabilitar toggles cuando hay falla.
+- (Opcional) Abrir PR en GitHub para revisión de equipos.
+
+Estado: cambios desplegados y probados en hardware — Todo OK.
 
 Los archivos no existen todavía. Voy a crear toda la estructura modular correctamente desde cero con los valores corregidos: 
 
