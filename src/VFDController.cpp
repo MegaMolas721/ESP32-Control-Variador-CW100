@@ -46,6 +46,22 @@ void VFDController::start() {
     _data.lastCommand = CMD_RUN;  // Registrar comando enviado (1)
 }
 
+void VFDController::startInverse() {
+    Serial.println("▶️ Arrancando motor (inverso)...");
+    Serial.printf("   Escribiendo: Registro=%d (0x%04X), Valor=%d\n", REG_COMMAND, REG_COMMAND, CMD_RUN_INVERSE);
+    if (_modbusLocked) {
+        unsigned long waitStart = millis();
+        while (_modbusLocked && (millis() - waitStart) < 500) delay(10);
+        if (_modbusLocked) {
+            Serial.println("[WARN] Modbus ocupado, abortando arranque inverso");
+            return;
+        }
+    }
+    _modbusLocked = true;
+    _modbus.writeHoldingRegister(REG_COMMAND, CMD_RUN_INVERSE, REG_COMMAND);
+    _data.lastCommand = CMD_RUN_INVERSE;  // Registrar comando enviado (2)
+}
+
 void VFDController::stop() {
     Serial.println("⏹️ Deteniendo motor...");
     Serial.printf("   Escribiendo: Registro=%d (0x%04X), Valor=%d\n", REG_COMMAND, REG_COMMAND, CMD_STOP);
@@ -60,6 +76,22 @@ void VFDController::stop() {
     _modbusLocked = true;
     _modbus.writeHoldingRegister(REG_COMMAND, CMD_STOP, REG_COMMAND);
     _data.lastCommand = CMD_STOP;  // Registrar comando enviado (6)
+}
+
+void VFDController::freeStop() {
+    Serial.println("⏹️ Paro libre (free stop) ejecutado...");
+    Serial.printf("   Escribiendo: Registro=%d (0x%04X), Valor=%d\n", REG_COMMAND, REG_COMMAND, CMD_FREE_STOP);
+    if (_modbusLocked) {
+        unsigned long waitStart = millis();
+        while (_modbusLocked && (millis() - waitStart) < 500) delay(10);
+        if (_modbusLocked) {
+            Serial.println("[WARN] Modbus ocupado, abortando free stop");
+            return;
+        }
+    }
+    _modbusLocked = true;
+    _modbus.writeHoldingRegister(REG_COMMAND, CMD_FREE_STOP, REG_COMMAND);
+    _data.lastCommand = CMD_FREE_STOP;  // Registrar comando enviado (5)
 }
 
 void VFDController::resetFault() {

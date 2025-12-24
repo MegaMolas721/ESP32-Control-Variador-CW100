@@ -92,12 +92,32 @@ void WebDashboard::handleCommand(AsyncWebServerRequest *request) {
         String cmd = request->getParam("cmd", true)->value();
         
         if (cmd == "start") {
-            _vfd.start();
-            request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Motor arrancado\"}");
+            bool reverse = false;
+            if (request->hasParam("reverse", true)) {
+                String v = request->getParam("reverse", true)->value();
+                if (v == "1" || v.equalsIgnoreCase("true")) reverse = true;
+            }
+            if (reverse) {
+                _vfd.startInverse();
+                request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Motor arrancado (inverso)\"}");
+            } else {
+                _vfd.start();
+                request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Motor arrancado\"}");
+            }
         }
         else if (cmd == "stop") {
-            _vfd.stop();
-            request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Motor detenido\"}");
+            bool freeStop = false;
+            if (request->hasParam("free", true)) {
+                String v = request->getParam("free", true)->value();
+                if (v == "1" || v.equalsIgnoreCase("true")) freeStop = true;
+            }
+            if (freeStop) {
+                _vfd.freeStop();
+                request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Motor detenido (free stop)\"}");
+            } else {
+                _vfd.stop();
+                request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Motor detenido\"}");
+            }
         }
         else if (cmd == "reset") {
             _vfd.resetFault();
@@ -325,6 +345,9 @@ String WebDashboard::generateHTML() {
             gap: 20px;
             justify-content: center;
             margin: 30px 0;
+            position: relative;
+            height: 160px;
+            align-items: center;
         }
         .btn {
             padding: 20px 40px;
@@ -341,6 +364,31 @@ String WebDashboard::generateHTML() {
             justify-content: center;
             box-shadow: 0 5px 15px rgba(0,0,0,0.2);
         }
+        /* Botones cuadrados autoenclavables (toggles) al borde */
+        .btn-toggle {
+            width: 120px;
+            height: 120px;
+            padding: 0;
+            border: none;
+            border-radius: 8px;
+            background: #e0e0e0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95em;
+            color: #333;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 5;
+        }
+        .btn-toggle:hover { transform: translateY(-50%) scale(1.03); }
+        .btn-toggle.active { background: #4CAF50; color: white; }
+        #btnReverse.active { background: #FF9800; color: white; }
+        .btn-toggle.left { left: 24px; }
+        .btn-toggle.right { right: 24px; }
         .btn:hover {
             transform: scale(1.1);
             box-shadow: 0 8px 25px rgba(0,0,0,0.3);
@@ -491,13 +539,22 @@ String WebDashboard::generateHTML() {
             </div>
         </div>
         
-        <!-- Botones de Control -->
-        <div class="controls">
+        <!-- Botones de Control con toggles cuadrados al borde -->
+        <div class="controls" style="align-items: center;">
+            <button id="btnFree" class="btn-toggle left" title="Motor libre (free stop)">
+                <div style="text-align:center; font-weight:bold;">MOTOR<br>LIBRE</div>
+            </button>
+
             <button class="btn btn-start" onclick="sendCommand('start')">
                 ▶<br>RUN
             </button>
+
             <button class="btn btn-stop" onclick="sendCommand('stop')">
                 ⏹<br>STOP
+            </button>
+
+            <button id="btnReverse" class="btn-toggle right" title="Cambio de giro (RUN inverso)">
+                <div style="text-align:center; font-weight:bold;">CAMBIO<br>GIRO</div>
             </button>
         </div>
         
@@ -508,7 +565,7 @@ String WebDashboard::generateHTML() {
                 <span id="commandValue">6</span>
             </div>
             <div style="margin-top: 10px; font-size: 0.9em; color: #666; text-align: center;">
-                1 = RUN<br>6 = STOP
+                1 = RUN &nbsp;&nbsp; 2 = RUN (inverso) <br> 5 = FREE STOP &nbsp;&nbsp; 6 = STOP
             </div>
         </div>
         
@@ -642,10 +699,21 @@ String WebDashboard::generateHTML() {
         }
         
         function sendCommand(cmd) {
+            // Construir el cuerpo con flags según toggles
+            let body = 'cmd=' + encodeURIComponent(cmd);
+            if (cmd === 'start') {
+                const rev = (document.getElementById('btnReverse') && document.getElementById('btnReverse').classList.contains('active')) ? '1' : '0';
+                body += '&reverse=' + rev;
+            }
+            if (cmd === 'stop') {
+                const free = (document.getElementById('btnFree') && document.getElementById('btnFree').classList.contains('active')) ? '1' : '0';
+                body += '&free=' + free;
+            }
+
             fetch('/api/command', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: 'cmd=' + cmd
+                body: body
             })
             .then(response => response.json())
             .then(data => {
@@ -655,6 +723,16 @@ String WebDashboard::generateHTML() {
             .catch(error => console.error('Error:', error));
         }
         
+        // Inicializar botones toggle (autoenclavables)
+        const btnFree = document.getElementById('btnFree');
+        const btnReverse = document.getElementById('btnReverse');
+        if (btnFree) {
+            btnFree.addEventListener('click', function(e){ e.preventDefault(); this.classList.toggle('active'); });
+        }
+        if (btnReverse) {
+            btnReverse.addEventListener('click', function(e){ e.preventDefault(); this.classList.toggle('active'); });
+        }
+
         function setFrequency() {
             const freq = document.getElementById('freqInput').value;
             fetch('/api/frequency', {

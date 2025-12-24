@@ -37,7 +37,9 @@ public:
     
     // Comandos de control
     void start();                       // Arrancar motor
+    void startInverse();                // Arrancar motor en sentido inverso
     void stop();                        // Detener motor
+    void freeStop();                    // Paro libre (free stop)
     void resetFault();                  // Resetear falla
     void setFrequency(float hz);        // Configurar frecuencia en Hz
     

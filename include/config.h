@@ -92,6 +92,11 @@ extern const uint8_t OUTPUT_PINS[NUM_OUTPUTS];
 #define CMD_RUN                     1       // 0x0001 - Arranque (RUN)
 #define CMD_STOP                    6       // 0x0006 - Paro (STOP)
 #define CMD_FAULT_RESET             0x0080  // 0x0080 - Reset de falla
+// Comandos adicionales (no estaban definidos):
+// 2 = RUN en sentido inverso (inverse RUN)
+// 5 = Paro libre (free stop)
+#define CMD_RUN_INVERSE             2       // 0x0002 - Arranque inverso
+#define CMD_FREE_STOP               5       // 0x0005 - Paro libre
 
 // ============================================================
 // CONFIGURACIÓN DEL SISTEMA
