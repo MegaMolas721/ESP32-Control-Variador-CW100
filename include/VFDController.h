@@ -60,6 +60,8 @@ public:
     String getStatusText() const;
     // Devuelve el setpoint efectivo (último leído si existe, si no el último solicitado)
     uint16_t getEffectiveSetpoint() const;
+    // Obtener descripción de código de falla (en español)
+    String getFaultDescription(uint16_t code) const;
     
     // Actualización periódica
     void update();                      // Llamar en loop para actualizar datos

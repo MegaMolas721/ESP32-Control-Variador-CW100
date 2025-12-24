@@ -158,6 +158,7 @@ String WebDashboard::generateStatusJSON() {
     json += "\"speedPercent\":" + String(data.speedPercent, 2) + ",";
     json += "\"setpoint\":" + String(effectiveSetpoint) + ",";
     json += "\"faultCode\":" + String(data.faultCode) + ",";
+    json += "\"faultDescription\":\"" + _vfd.getFaultDescription(data.faultCode) + "\",";
     json += "\"lastCommand\":" + String(data.lastCommand) + ",";  // Comando 2000H (1=RUN, 6=STOP)
     json += "\"isRunning\":" + String(data.isRunning ? "true" : "false") + ",";
     json += "\"hasFault\":" + String(data.hasFault ? "true" : "false");
@@ -626,12 +627,14 @@ String WebDashboard::generateHTML() {
                     const commandValue = document.getElementById('commandValue');
                     commandValue.textContent = data.lastCommand;
                     
-                    // Actualizar falla
+                    // Actualizar falla (código + descripción en español)
                     const faultBox = document.getElementById('faultBox');
-                    faultBox.textContent = data.faultCode;
+                    const desc = data.faultDescription ? data.faultDescription : '';
                     if (data.faultCode == 0) {
+                        faultBox.textContent = data.faultCode + ' - ' + desc;
                         faultBox.className = 'fault-box no-fault';
                     } else {
+                        faultBox.textContent = data.faultCode + ' - ' + desc;
                         faultBox.className = 'fault-box';
                     }
                 })

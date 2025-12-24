@@ -293,3 +293,54 @@ String VFDController::getStatusText() const {
         default:              return "Desconocido";
     }
 }
+
+String VFDController::getFaultDescription(uint16_t code) const {
+    switch(code) {
+        case 0x0000: return "Sin falla";
+        case 0x0001: return "Reservado";
+        case 0x0015: return "Lectura/escritura de parámetro";
+        case 0x0002: return "Sobrecorriente durante aceleración";
+        case 0x0003: return "Sobrecorriente durante deceleración";
+        case 0x0004: return "Sobrecorriente a velocidad constante";
+        case 0x0005: return "Sobrevoltaje durante aceleración";
+        case 0x0006: return "Sobrevoltaje durante deceleración";
+        case 0x0007: return "Sobrevoltaje a velocidad constante";
+        case 0x0008: return "Sobrecarga en resistencia de frenado";
+        case 0x0009: return "Subtensión";
+        case 0x000A: return "Sobrecarga del inversor";
+        case 0x000B: return "Sobrecarga del motor";
+        case 0x000C: return "Falta de fase en entrada";
+        case 0x0016: return "Fallo de hardware";
+        case 0x0017: return "Cortocircuito del motor a tierra";
+        case 0x0018: return "Reservado";
+        case 0x0019: return "Reservado";
+        case 0x001A: return "Tiempo de ejecución excedido";
+        case 0x001B: return "Falla personalizada de usuario 1";
+        case 0x001C: return "Falla personalizada de usuario 2";
+        case 0x001D: return "Tiempo de encendido excedido";
+        case 0x001E: return "Funcionamiento sin carga";
+        case 0x001F: return "Pérdida de retroalimentación PID en tiempo de ejecución";
+        case 0x0028: return "Tiempo límite de limitación de corriente rápida alcanzado";
+        case 0x0029: return "Fallo de conmutación del motor en tiempo de ejecución";
+        case 0x002A: return "Fallo relacionado con la velocidad";
+        case 0x000D: return "Falta de fase en salida";
+        case 0x000E: return "Sobrecalentamiento del módulo";
+        case 0x000F: return "Fallo externo";
+        case 0x0010: return "Comunicación anómala";
+        case 0x0011: return "Contactor anómalo";
+        case 0x0012: return "Fallo en detección de corriente";
+        case 0x0013: return "Fallo en ajuste del motor";
+        case 0x0014: return "Fallo del encoder/PG: desviación demasiado alta";
+        case 0x002B: return "Sobrevelocidad del motor";
+        case 0x002D: return "Sobretemperatura del motor";
+        case 0x005A: return "Error en configuración de número de líneas del encoder";
+        case 0x005B: return "Encoder no conectado";
+        case 0x005C: return "Error de posición inicial";
+        case 0x005E: return "Error de retroalimentación de velocidad";
+        default: {
+            char buf[32];
+            sprintf(buf, "Código desconocido 0x%04X", code);
+            return String(buf);
+        }
+    }
+}
