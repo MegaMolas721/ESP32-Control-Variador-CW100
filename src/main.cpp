@@ -172,10 +172,58 @@ void loop() {
     // 3. Leer entradas del PLC
     ioMgr.readInputs();
     
-    // 4. Procesar comandos desde Serial
+    // 4. Control por entradas físicas
+    static bool lastIn2 = false;
+    static bool lastIn3 = false;
+    static bool lastIn4 = false;
+    // IN2 -> index 1, IN3 -> index 2, IN4 -> index 3
+    bool in2 = ioMgr.getInput(1);
+    bool in3 = ioMgr.getInput(2);
+    bool in4 = ioMgr.getInput(3);
+
+    // Detectar flanco ascendente en IN2: toggle cambio de giro (solo si control por HW)
+    if (ioMgr.getReverseControlByHW()) {
+        if (in2 && !lastIn2) {
+            bool newState = !ioMgr.getReverseToggle();
+            ioMgr.setReverseToggle(newState);
+            Serial.printf("[I/O] IN2 activada - Cambio de giro toggled => %s\n", newState ? "ON" : "OFF");
+        }
+    }
+
+    // Detectar flanco ascendente en IN3: accionar STOP (considerar free toggle)
+    // IN3 -> STOP (solo si control por HW para la función 'free/stop')
+    if (ioMgr.getFreeControlByHW()) {
+        if (in3 && !lastIn3) {
+            Serial.println("[I/O] IN3 activada - Ejecutando STOP desde input");
+            if (ioMgr.getFreeToggle()) {
+                vfdController.freeStop();
+            } else {
+                vfdController.stop();
+            }
+        }
+    }
+
+    // Detectar flanco ascendente en IN4: ejecutar RUN (considerar cambio de giro toggle)
+    // IN4 -> RUN (solo si control por HW para la función 'cambio de giro')
+    if (ioMgr.getReverseControlByHW()) {
+        if (in4 && !lastIn4) {
+            Serial.println("[I/O] IN4 activada - Ejecutando RUN desde input");
+            if (ioMgr.getReverseToggle()) {
+                vfdController.startInverse();
+            } else {
+                vfdController.start();
+            }
+        }
+    }
+
+    lastIn2 = in2;
+    lastIn3 = in3;
+    lastIn4 = in4;
+    
+    // 5. Procesar comandos desde Serial
     processSerialCommands();
     
-    // 5. Control lógico basado en entradas (ejemplo)
+    // 6. Control lógico basado en entradas (ejemplo)
     // Descomentar y adaptar según necesidad:
     /*
     static bool lastInput0 = false;

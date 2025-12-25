@@ -8,6 +8,15 @@ IOManager::IOManager() {
     for (uint8_t i = 0; i < NUM_OUTPUTS; i++) {
         _outputStates[i] = false;
     }
+    // Inicializar toggles UI
+    _reverseToggle = false;
+    _freeToggle = false;
+    _reverseControlByHW = true; // por defecto, control por HW para compatibilidad
+    _freeControlByHW = true;
+    // Por defecto permitir control por UI para RUN/STOP (UI active).
+    // Esto evita que los botones RUN/STOP estén deshabilitados por defecto.
+    _runControlByHW = false;
+    _stopControlByHW = false;
 }
 
 void IOManager::begin() {
@@ -138,4 +147,57 @@ uint8_t IOManager::getOutputPin(uint8_t index) {
         return _outputPins[index];
     }
     return 0;
+}
+
+// ============================================================
+// TOGGLES UI (control desde botones web o entradas)
+// ============================================================
+void IOManager::setReverseToggle(bool state) {
+    _reverseToggle = state;
+}
+
+bool IOManager::getReverseToggle() const {
+    return _reverseToggle;
+}
+
+void IOManager::setFreeToggle(bool state) {
+    _freeToggle = state;
+}
+
+bool IOManager::getFreeToggle() const {
+    return _freeToggle;
+}
+
+// Control source accessors
+void IOManager::setReverseControlByHW(bool state) {
+    _reverseControlByHW = state;
+}
+
+bool IOManager::getReverseControlByHW() const {
+    return _reverseControlByHW;
+}
+
+void IOManager::setFreeControlByHW(bool state) {
+    _freeControlByHW = state;
+}
+
+bool IOManager::getFreeControlByHW() const {
+    return _freeControlByHW;
+}
+
+// RUN/STOP control accessors
+void IOManager::setRunControlByHW(bool state) {
+    _runControlByHW = state;
+}
+
+bool IOManager::getRunControlByHW() const {
+    return _runControlByHW;
+}
+
+void IOManager::setStopControlByHW(bool state) {
+    _stopControlByHW = state;
+}
+
+bool IOManager::getStopControlByHW() const {
+    return _stopControlByHW;
 }

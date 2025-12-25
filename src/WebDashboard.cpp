@@ -68,6 +68,62 @@ void WebDashboard::setupRoutes() {
             request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Falta parámetro percent\"}");
         }
     });
+
+    // API: Set I/O control mode (HW or UI)
+    _server.on("/api/io/mode", HTTP_POST, [this](AsyncWebServerRequest *request){
+        if (request->hasParam("target", true) && request->hasParam("mode", true)) {
+            String target = request->getParam("target", true)->value();
+            String mode = request->getParam("mode", true)->value();
+            bool byHW = (mode == "hw" || mode.equalsIgnoreCase("gpio"));
+            if (target == "reverse") {
+                _io.setReverseControlByHW(byHW);
+                request->send(200, "application/json", "{\"status\":\"ok\",\"target\":\"reverse\",\"mode\":\"" + mode + "\"}");
+                return;
+            } else if (target == "free") {
+                _io.setFreeControlByHW(byHW);
+                request->send(200, "application/json", "{\"status\":\"ok\",\"target\":\"free\",\"mode\":\"" + mode + "\"}");
+                return;
+            } else if (target == "run") {
+                _io.setRunControlByHW(byHW);
+                request->send(200, "application/json", "{\"status\":\"ok\",\"target\":\"run\",\"mode\":\"" + mode + "\"}");
+                return;
+            } else if (target == "stop") {
+                _io.setStopControlByHW(byHW);
+                request->send(200, "application/json", "{\"status\":\"ok\",\"target\":\"stop\",\"mode\":\"" + mode + "\"}");
+                return;
+            }
+        }
+        request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Parametros invalidos\"}");
+    });
+
+    // API: Set UI toggle state (user clicked UI button)
+    _server.on("/api/io/toggle", HTTP_POST, [this](AsyncWebServerRequest *request){
+        if (request->hasParam("target", true) && request->hasParam("value", true)) {
+            String target = request->getParam("target", true)->value();
+            String val = request->getParam("value", true)->value();
+            bool state = (val == "1" || val.equalsIgnoreCase("true"));
+            if (target == "reverse") {
+                // If reverse is controlled by HW, ignore UI toggles
+                if (_io.getReverseControlByHW()) {
+                    request->send(403, "application/json", "{\"status\":\"error\",\"message\":\"Control por HW - toggle ignorado\"}");
+                    return;
+                }
+                _io.setReverseToggle(state);
+                request->send(200, "application/json", "{\"status\":\"ok\",\"target\":\"reverse\",\"value\":" + String(state ? "1" : "0") + "}");
+                return;
+            } else if (target == "free") {
+                // If free stop is controlled by HW, ignore UI toggles
+                if (_io.getFreeControlByHW()) {
+                    request->send(403, "application/json", "{\"status\":\"error\",\"message\":\"Control por HW - toggle ignorado\"}");
+                    return;
+                }
+                _io.setFreeToggle(state);
+                request->send(200, "application/json", "{\"status\":\"ok\",\"target\":\"free\",\"value\":" + String(state ? "1" : "0") + "}");
+                return;
+            }
+        }
+        request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Parametros invalidos\"}");
+    });
 }
 
 void WebDashboard::handleRoot(AsyncWebServerRequest *request) {
@@ -97,6 +153,11 @@ void WebDashboard::handleCommand(AsyncWebServerRequest *request) {
                 String v = request->getParam("reverse", true)->value();
                 if (v == "1" || v.equalsIgnoreCase("true")) reverse = true;
             }
+            // If RUN is controlled by HW, ignore UI start commands
+            if (_io.getRunControlByHW()) {
+                request->send(403, "application/json", "{\"status\":\"error\",\"message\":\"Control por HW - comando START ignorado\"}");
+                return;
+            }
             if (reverse) {
                 _vfd.startInverse();
                 request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Motor arrancado (inverso)\"}");
@@ -110,6 +171,11 @@ void WebDashboard::handleCommand(AsyncWebServerRequest *request) {
             if (request->hasParam("free", true)) {
                 String v = request->getParam("free", true)->value();
                 if (v == "1" || v.equalsIgnoreCase("true")) freeStop = true;
+            }
+            // If STOP is controlled by HW, ignore UI stop commands
+            if (_io.getStopControlByHW()) {
+                request->send(403, "application/json", "{\"status\":\"error\",\"message\":\"Control por HW - comando STOP ignorado\"}");
+                return;
             }
             if (freeStop) {
                 _vfd.freeStop();
@@ -182,6 +248,35 @@ String WebDashboard::generateStatusJSON() {
     json += "\"lastCommand\":" + String(data.lastCommand) + ",";  // Comando 2000H (1=RUN, 6=STOP)
     json += "\"isRunning\":" + String(data.isRunning ? "true" : "false") + ",";
     json += "\"hasFault\":" + String(data.hasFault ? "true" : "false");
+    // Incluir estado de toggles controlables desde HW (IN2/IN3)
+    json += ",\"uiReverseToggle\":" + String(_io.getReverseToggle() ? "true" : "false");
+    json += ",\"uiFreeToggle\":" + String(_io.getFreeToggle() ? "true" : "false");
+    // Indicar si el control es por HW (GPIO) o por UI (pantalla)
+    json += ",\"reverseControlByHW\":" + String(_io.getReverseControlByHW() ? "true" : "false");
+    json += ",\"freeControlByHW\":" + String(_io.getFreeControlByHW() ? "true" : "false");
+    json += ",\"runControlByHW\":" + String(_io.getRunControlByHW() ? "true" : "false");
+    json += ",\"stopControlByHW\":" + String(_io.getStopControlByHW() ? "true" : "false");
+
+    // Incluir arrays de I/O (entradas y salidas)
+    json += ",\"inputs\": [";
+    for (uint8_t i = 0; i < NUM_INPUTS; i++) {
+        uint8_t pin = _io.getInputPin(i);
+        bool val = _io.getInput(i);
+        String name = "IN" + String(i + 1);
+        json += "{\"pin\":" + String(pin) + ",\"name\":\"" + name + "\",\"value\":" + String(val ? 1 : 0) + "}";
+        if (i < NUM_INPUTS - 1) json += ",";
+    }
+    json += "]";
+
+    json += ",\"outputs\": [";
+    for (uint8_t i = 0; i < NUM_OUTPUTS; i++) {
+        uint8_t pin = _io.getOutputPin(i);
+        bool val = _io.getOutput(i);
+        String name = "OUT" + String(i + 1);
+        json += "{\"pin\":" + String(pin) + ",\"name\":\"" + name + "\",\"value\":" + String(val ? 1 : 0) + "}";
+        if (i < NUM_OUTPUTS - 1) json += ",";
+    }
+    json += "]";
     json += "}";
     
     return json;
@@ -382,13 +477,17 @@ String WebDashboard::generateHTML() {
             position: absolute;
             top: 50%;
             transform: translateY(-50%);
-            z-index: 5;
+            z-index: 3;
         }
         .btn-toggle:hover { transform: translateY(-50%) scale(1.03); }
         .btn-toggle.active { background: #4CAF50; color: white; }
         #btnReverse.active { background: #FF9800; color: white; }
-        .btn-toggle.left { left: 24px; }
-        .btn-toggle.right { right: 24px; }
+        /* Push toggles further to the extremes so they don't overlap central buttons */
+        .btn-toggle.left { left: -160px; }
+        .btn-toggle.right { right: -160px; }
+        /* Ensure central action buttons stay on top */
+        .btn { z-index: 7; }
+        .btn { z-index: 6; }
         .btn:hover {
             transform: scale(1.1);
             box-shadow: 0 8px 25px rgba(0,0,0,0.3);
@@ -446,6 +545,10 @@ String WebDashboard::generateHTML() {
         .no-fault {
             background: #4CAF50;
         }
+        .gpio-item { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; border-radius:6px; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,0.05); margin-bottom:8px; }
+        .gpio-badge { padding:6px 10px; border-radius:12px; font-weight:bold; font-size:0.9em; }
+        .gpio-on { background:#4CAF50; color:#fff; }
+        .gpio-off { background:#9E9E9E; color:#fff; }
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
@@ -458,6 +561,7 @@ String WebDashboard::generateHTML() {
 <body>
     <div class="container">
         <h1>🎛️ Control Variador CW100</h1>
+        <div id="currentTime" style="position:absolute; top:24px; right:36px; font-weight:600; color:#444;"></div>
         
         <!-- Tabs -->
         <div class="tabs">
@@ -494,6 +598,21 @@ String WebDashboard::generateHTML() {
                 </div>
             </div>
             
+            <!-- GPIO status: Entradas y Salidas -->
+            <div class="card" style="margin-top: 20px;">
+                <div class="card-title">GPIO de ESP32</div>
+                <div style="display:flex; gap:20px; flex-wrap:wrap;">
+                    <div style="flex:1; min-width:220px;">
+                        <div style="font-weight:bold; margin-bottom:8px;">Entradas</div>
+                        <ul id="gpioInputs" style="list-style:none; padding:0; margin:0;"></ul>
+                    </div>
+                    <div style="flex:1; min-width:220px;">
+                        <div style="font-weight:bold; margin-bottom:8px;">Salidas</div>
+                        <ul id="gpioOutputs" style="list-style:none; padding:0; margin:0;"></ul>
+                    </div>
+                </div>
+            </div>
+
             <div style="text-align: center; margin-top: 30px;">
                 <button class="btn-reset" onclick="disconnectWiFi()" style="font-size: 1.5em; padding: 20px 50px;">
                     📶 DESCONECTAR WIFI
@@ -541,21 +660,37 @@ String WebDashboard::generateHTML() {
         
         <!-- Botones de Control con toggles cuadrados al borde -->
         <div class="controls" style="align-items: center;">
-            <button id="btnFree" class="btn-toggle left" title="Motor libre (free stop)">
-                <div style="text-align:center; font-weight:bold;">MOTOR<br>LIBRE</div>
-            </button>
+            <!-- Global selector for Free/Reverse buttons control source -->
+            <div style="position:absolute; top:-52px; left:50%; transform:translateX(-50%); text-align:center;">
+                <label style="font-weight:700; margin-right:8px;">Modo botones (LIBRE / GIRO):</label>
+                <select id="modeIO" style="padding:6px 8px; border-radius:6px;">
+                    <option value="hw">GPIO</option>
+                    <option value="ui">Pantalla</option>
+                </select>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:8px; position:relative;">
+                <button id="btnFree" class="btn-toggle left" title="Motor libre (free stop)">
+                    <div style="text-align:center; font-weight:bold;">MOTOR<br>LIBRE</div>
+                </button>
+            </div>
 
-            <button class="btn btn-start" onclick="sendCommand('start')">
-                ▶<br>RUN
-            </button>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+                <button id="btnStart" class="btn btn-start" onclick="sendCommand('start')">
+                    ▶<br>RUN
+                </button>
+            </div>
 
-            <button class="btn btn-stop" onclick="sendCommand('stop')">
-                ⏹<br>STOP
-            </button>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+                <button id="btnStop" class="btn btn-stop" onclick="sendCommand('stop')">
+                    ⏹<br>STOP
+                </button>
+            </div>
 
-            <button id="btnReverse" class="btn-toggle right" title="Cambio de giro (RUN inverso)">
-                <div style="text-align:center; font-weight:bold;">CAMBIO<br>GIRO</div>
-            </button>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:8px; position:relative;">
+                <button id="btnReverse" class="btn-toggle right" title="Cambio de giro (RUN inverso)">
+                    <div style="text-align:center; font-weight:bold;">CAMBIO<br>GIRO</div>
+                </button>
+            </div>
         </div>
         
         <!-- Visualización de Comando de Ejecución 2000H -->
@@ -617,6 +752,38 @@ String WebDashboard::generateHTML() {
                     document.getElementById('wifi-type').textContent = data.connectionType;
                     document.getElementById('wifi-rssi').innerHTML = 
                         data.rssi + ' <span class="unit">dBm</span>';
+                })
+                .catch(error => console.error('Error:', error));
+            // Actualizar estado de I/O también
+            updateIOStatus();
+        }
+
+        function updateIOStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    const inputsEl = document.getElementById('gpioInputs');
+                    const outputsEl = document.getElementById('gpioOutputs');
+                    if (inputsEl && data.inputs) {
+                        inputsEl.innerHTML = '';
+                        data.inputs.forEach(item => {
+                            const li = document.createElement('li');
+                            li.className = 'gpio-item';
+                            li.innerHTML = '<div>' + item.name + ' (GPIO ' + item.pin + ')</div>' +
+                                '<div><span class="gpio-badge ' + (item.value ? 'gpio-on' : 'gpio-off') + '">' + (item.value ? 'ON' : 'OFF') + '</span></div>';
+                            inputsEl.appendChild(li);
+                        });
+                    }
+                    if (outputsEl && data.outputs) {
+                        outputsEl.innerHTML = '';
+                        data.outputs.forEach(item => {
+                            const li = document.createElement('li');
+                            li.className = 'gpio-item';
+                            li.innerHTML = '<div>' + item.name + ' (GPIO ' + item.pin + ')</div>' +
+                                '<div><span class="gpio-badge ' + (item.value ? 'gpio-on' : 'gpio-off') + '">' + (item.value ? 'ON' : 'OFF') + '</span></div>';
+                            outputsEl.appendChild(li);
+                        });
+                    }
                 })
                 .catch(error => console.error('Error:', error));
         }
@@ -683,6 +850,32 @@ String WebDashboard::generateHTML() {
                     // Actualizar comando de ejecución 2000H
                     const commandValue = document.getElementById('commandValue');
                     commandValue.textContent = data.lastCommand;
+
+                    // Sincronizar estado de toggles provenientes del hardware
+                    const btnFree = document.getElementById('btnFree');
+                    const btnReverse = document.getElementById('btnReverse');
+                    const modeIO = document.getElementById('modeIO');
+                    if (btnFree) {
+                        if (data.uiFreeToggle === true || data.uiFreeToggle === 'true') btnFree.classList.add('active');
+                        else btnFree.classList.remove('active');
+                    }
+                    if (btnReverse) {
+                        if (data.uiReverseToggle === true || data.uiReverseToggle === 'true') btnReverse.classList.add('active');
+                        else btnReverse.classList.remove('active');
+                    }
+                    // Actualizar selector global para botones LIBRE/GIRO
+                    if (modeIO) {
+                        const v = (data.freeControlByHW === true && data.reverseControlByHW === true) ? 'hw' : 'ui';
+                        modeIO.value = v;
+                        // Disable/enable the edge buttons depending on the global mode
+                        if (btnFree) btnFree.disabled = (v === 'hw');
+                        if (btnReverse) btnReverse.disabled = (v === 'hw');
+                    }
+                    // Disable RUN/STOP buttons when their respective control is by HW
+                    const btnStart = document.getElementById('btnStart');
+                    const btnStop = document.getElementById('btnStop');
+                    if (btnStart) btnStart.disabled = (data.runControlByHW === true || data.runControlByHW === 'true');
+                    if (btnStop) btnStop.disabled = (data.stopControlByHW === true || data.stopControlByHW === 'true');
                     
                     // Actualizar falla (código + descripción en español)
                     const faultBox = document.getElementById('faultBox');
@@ -701,6 +894,7 @@ String WebDashboard::generateHTML() {
         function sendCommand(cmd) {
             // Construir el cuerpo con flags según toggles
             let body = 'cmd=' + encodeURIComponent(cmd);
+            // Let the server decide if START/STOP are accepted; server may return 403 if controlled by HW
             if (cmd === 'start') {
                 const rev = (document.getElementById('btnReverse') && document.getElementById('btnReverse').classList.contains('active')) ? '1' : '0';
                 body += '&reverse=' + rev;
@@ -723,14 +917,93 @@ String WebDashboard::generateHTML() {
             .catch(error => console.error('Error:', error));
         }
         
-        // Inicializar botones toggle (autoenclavables)
+        // Inicializar botones toggle (autoenclavables) y usar selector global `modeIO`
         const btnFree = document.getElementById('btnFree');
         const btnReverse = document.getElementById('btnReverse');
         if (btnFree) {
-            btnFree.addEventListener('click', function(e){ e.preventDefault(); this.classList.toggle('active'); });
+            btnFree.addEventListener('click', function(e){
+                e.preventDefault();
+                const mode = (modeIOSel && modeIOSel.value) ? modeIOSel.value : 'hw';
+                if (mode === 'hw') {
+                    console.log('Free toggle ignored: control por HW');
+                    return;
+                }
+                this.classList.toggle('active');
+                const state = this.classList.contains('active') ? '1' : '0';
+                fetch('/api/io/toggle', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'target=free&value=' + state
+                }).then(r => r.json()).then(d => {
+                    console.log('Free toggle set', d);
+                    setTimeout(updateStatus, 300);
+                }).catch(err => console.error('Error toggling free:', err));
+            });
         }
         if (btnReverse) {
-            btnReverse.addEventListener('click', function(e){ e.preventDefault(); this.classList.toggle('active'); });
+            btnReverse.addEventListener('click', function(e){
+                e.preventDefault();
+                const mode = (modeIOSel && modeIOSel.value) ? modeIOSel.value : 'hw';
+                if (mode === 'hw') {
+                    console.log('Reverse toggle ignored: control por HW');
+                    return;
+                }
+                this.classList.toggle('active');
+                const state = this.classList.contains('active') ? '1' : '0';
+                fetch('/api/io/toggle', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'target=reverse&value=' + state
+                }).then(r => r.json()).then(d => {
+                    console.log('Reverse toggle set', d);
+                    setTimeout(updateStatus, 300);
+                }).catch(err => console.error('Error toggling reverse:', err));
+            });
+        }
+
+        // Single IO mode selector controlling both FREE and REVERSE buttons
+        const modeIOSel = document.getElementById('modeIO');
+        if (modeIOSel) {
+            modeIOSel.addEventListener('change', function(){
+                const mode = this.value; // 'hw' or 'ui'
+                // Apply to both free and reverse (send two requests)
+                fetch('/api/io/mode', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'target=free&mode=' + encodeURIComponent(mode)
+                }).then(r => r.json()).then(d => { console.log('Mode free set (via IO selector)', d); })
+                .catch(err => console.error('Error setting free mode:', err));
+                fetch('/api/io/mode', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'target=reverse&mode=' + encodeURIComponent(mode)
+                }).then(r => r.json()).then(d => { console.log('Mode reverse set (via IO selector)', d); setTimeout(updateStatus,300); })
+                .catch(err => console.error('Error setting reverse mode:', err));
+            });
+        }
+        const modeRunSel = document.getElementById('modeRun');
+        const modeStopSel = document.getElementById('modeStop');
+        if (modeRunSel) {
+            modeRunSel.addEventListener('change', function(){
+                const mode = this.value;
+                fetch('/api/io/mode', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'target=run&mode=' + encodeURIComponent(mode)
+                }).then(r => r.json()).then(d => { console.log('Mode run set', d); setTimeout(updateStatus,300); })
+                .catch(err => console.error('Error setting run mode:', err));
+            });
+        }
+        if (modeStopSel) {
+            modeStopSel.addEventListener('change', function(){
+                const mode = this.value;
+                fetch('/api/io/mode', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'target=stop&mode=' + encodeURIComponent(mode)
+                }).then(r => r.json()).then(d => { console.log('Mode stop set', d); setTimeout(updateStatus,300); })
+                .catch(err => console.error('Error setting stop mode:', err));
+            });
         }
 
         function setFrequency() {
@@ -776,6 +1049,17 @@ String WebDashboard::generateHTML() {
                 updateStatus();
             }
         }, 1000);
+        // Actualizar reloj cada segundo
+        function updateClock() {
+            const now = new Date();
+            const pad = (n) => n.toString().padStart(2, '0');
+            const date = pad(now.getDate()) + '/' + pad(now.getMonth() + 1) + '/' + now.getFullYear();
+            const time = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+            const el = document.getElementById('currentTime');
+            if (el) el.textContent = date + ' ' + time;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
         
         // Inicializar mostrando WiFi info
         updateWiFiInfo();

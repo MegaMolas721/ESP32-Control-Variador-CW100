@@ -4564,3 +4564,28 @@ GitHub Copilot: Perfecto — gracias por avisar. ¿Qué te preparo ahora? (elige
 ---
 Cambios en branch o rama: `main`
 ---
+ 
+## 📝 Entrada añadida: 24/12/2025 – Chat reciente (UI / I/O arbitration)
+
+- **Contexto**: El usuario informó conflictos entre control por pantalla (UI) y control por GPIO (HW) para `MOTOR LIBRE`, `CAMBIO GIRO`, `RUN` y `STOP`. También solicitó reposicionar los toggles a los extremos y un único selector maestro que determine si esas funciones son controladas por la UI o por GPIO.
+
+- **Acciones realizadas (resumen de la sesión):**
+   - Añadidos flags de control por HW/UI en `IOManager` y sus accessors: `reverseControlByHW`, `freeControlByHW`, `runControlByHW`, `stopControlByHW`.
+   - Actualizada la API en `WebDashboard` para recibir `/api/io/mode` y `/api/io/toggle`, respetando los flags de control; el servidor devuelve 403 si una acción UI está deshabilitada por HW.
+   - UI: Reposicionados `MOTOR LIBRE` (izquierda) y `CAMBIO GIRO` (derecha) como toggles en los extremos; agregado selector global `modeIO` que gobierna ambos toggles.
+   - JS: Corrección de error por declaración duplicada (`modeIOSel`), bloqueo de clicks cuando `modeIO` = `hw`, envío de peticiones para cambiar modo y toggles, y reloj (fecha+hora) en la cabecera.
+   - CSS: desplazamiento adicional de toggles y ajuste de `z-index` para evitar solapamiento con botones centrales `RUN`/`STOP`.
+   - Cambiado por defecto `runControlByHW` y `stopControlByHW` a `false` para permitir control por UI hasta que el usuario seleccione lo contrario.
+
+- **Archivos modificados (principales):**
+   - `src/WebDashboard.cpp` — HTML/CSS/JS + endpoints API
+   - `include/IOManager.h` — nuevos getters/setters
+   - `src/IOManager.cpp` — inicialización y lógica de flags
+   - `src/VFDController.cpp` — (métodos `startInverse()`, `freeStop()` ya presentes/ajustados en sesiones previas)
+
+- **Observaciones y recomendaciones:**
+   - Verificar en el navegador (DevTools Console) que no hay errores JS y que el reloj aparece en la cabecera.
+   - En hardware, comprobar comportamiento con `platformio run` y `platformio run --target upload --upload-port COM4`.
+   - Opcional: añadir `debounce` en entradas GPIO si se detectan rebotes y persistencia en `localStorage` para toggles.
+
+---
